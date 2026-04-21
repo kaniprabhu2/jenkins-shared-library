@@ -12,35 +12,35 @@ class DeployManager implements Serializable {
     // VALIDATION
     // =========================
     def validate() {
-        steps.echo "Starting CI validation..."
+    steps.echo "Starting CI validation..."
 
-        steps.sh "ls -l"
+    steps.sh "ls -l"
 
-        // docker-compose check
-        steps.sh """
-        if [ -f docker-compose.yaml ]; then
-            echo "docker-compose.yaml found"
+    // ONLY critical check → fail if missing
+    steps.sh """
+    if [ -f docker-compose.yaml ]; then
+        echo "docker-compose.yaml found"
+    else
+        echo "docker-compose.yaml missing!"
+        exit 1
+    fi
+    """
+
+    // NON-CRITICAL checks → do NOT fail pipeline
+    steps.sh """
+    echo "Checking service Dockerfiles..."
+
+    for dir in attendance employee frontend mysql notification elasticsearch; do
+        if [ -f "$dir/Dockerfile" ]; then
+            echo "$dir Dockerfile exists"
         else
-            echo "docker-compose.yaml missing!"
-            exit 1
+            echo "WARNING: $dir Dockerfile missing"
         fi
-        """
+    done
+    """
 
-        // Check service Dockerfiles
-        steps.sh """
-        echo "Checking service Dockerfiles..."
-
-        for dir in attendance employee frontend mysql notification elasticsearch; do
-            if [ -f "$dir/Dockerfile" ]; then
-                echo "$dir Dockerfile exists"
-            else
-                echo "$dir Dockerfile missing"
-            fi
-        done
-        """
-
-        steps.echo "Validation successful"
-    }
+    steps.echo "Validation successful"
+}
 
     // =========================
     // DEPLOY ENTRY
