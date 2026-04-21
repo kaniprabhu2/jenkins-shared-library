@@ -14,7 +14,6 @@ class DeployManager implements Serializable {
     def validate() {
         steps.echo "Starting CI validation..."
 
-        // Repo structure
         steps.sh "ls -l"
 
         // docker-compose check
@@ -27,7 +26,7 @@ class DeployManager implements Serializable {
         fi
         """
 
-        // Check Dockerfiles inside services
+        // Check service Dockerfiles
         steps.sh """
         echo "Checking service Dockerfiles..."
 
@@ -44,7 +43,7 @@ class DeployManager implements Serializable {
     }
 
     // =========================
-    // MAIN DEPLOY ENTRY
+    // DEPLOY ENTRY
     // =========================
     def deploy(String env, String strategy) {
         steps.echo "Deploying using ${strategy} strategy in ${env}"
@@ -70,12 +69,12 @@ class DeployManager implements Serializable {
     def rollingDeploy() {
         steps.echo "Rolling deployment started"
 
-        steps.dir("salary") {
-            steps.sh """
-            docker-compose down
-            docker-compose up -d
-            """
-        }
+        steps.sh """
+        cd salary
+        docker-compose pull
+        docker-compose down
+        docker-compose up -d
+        """
     }
 
     // =========================
@@ -84,13 +83,13 @@ class DeployManager implements Serializable {
     def blueGreenDeploy() {
         steps.echo "Blue-Green deployment started"
 
-        steps.dir("salary") {
-            steps.sh """
-            echo "Deploying GREEN version..."
-            docker-compose up -d
-            echo "Switching traffic (simulated)"
-            """
-        }
+        steps.sh """
+        cd salary
+        docker-compose pull
+        echo "Deploying GREEN version..."
+        docker-compose up -d
+        echo "Switching traffic (simulated)"
+        """
     }
 
     // =========================
@@ -99,14 +98,14 @@ class DeployManager implements Serializable {
     def canaryDeploy() {
         steps.echo "Canary deployment started"
 
-        steps.dir("salary") {
-            steps.sh """
-            echo "Deploying canary version..."
-            sleep 5
-            echo "Promoting full deployment..."
-            docker-compose up -d
-            """
-        }
+        steps.sh """
+        cd salary
+        docker-compose pull
+        echo "Deploying canary version..."
+        sleep 5
+        echo "Promoting full deployment..."
+        docker-compose up -d
+        """
     }
 
     // =========================
@@ -126,11 +125,11 @@ class DeployManager implements Serializable {
     def rollback() {
         steps.echo "Rollback triggered"
 
-        steps.dir("salary") {
-            steps.sh """
-            docker-compose down
-            docker-compose up -d
-            """
-        }
+        steps.sh """
+        cd salary
+        docker-compose pull
+        docker-compose down
+        docker-compose up -d
+        """
     }
 }
