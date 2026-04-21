@@ -14,10 +14,20 @@ class DeployManager implements Serializable {
     def validate() {
         steps.echo "Starting CI validation..."
 
-        // Lint simulation
-        steps.sh "echo 'Running lint checks...'"
+        // Basic check
+        steps.sh "echo 'Checking repository structure...' && ls -l"
 
-        // YAML validation (if available)
+        // docker-compose check (important for your repo)
+        steps.sh """
+        if [ -f docker-compose.yaml ]; then
+            echo "docker-compose.yaml found"
+        else
+            echo "docker-compose.yaml missing!"
+            exit 1
+        fi
+        """
+
+        // YAML validation (optional)
         steps.sh """
         if command -v yamllint >/dev/null 2>&1; then
             yamllint .
@@ -26,14 +36,19 @@ class DeployManager implements Serializable {
         fi
         """
 
-        // Dockerfile validation
+        // Microservice folders check
         steps.sh """
-        if [ -f Dockerfile ]; then
-            echo "Dockerfile exists"
-        else
-            echo "Dockerfile missing!" && exit 1
-        fi
+        for dir in attendance employee frontend mysql notification salary; do
+            if [ -d "$dir" ]; then
+                echo "$dir exists"
+            else
+                echo "$dir missing"
+            fi
+        done
         """
+
+        // Git info
+        steps.sh "git log -1 --oneline"
 
         steps.echo "Validation successful"
     }
@@ -42,7 +57,7 @@ class DeployManager implements Serializable {
     // MAIN DEPLOY ENTRY
     // =========================
     def deploy(String env, String strategy) {
-        steps.echo "Deploying to ${env} using ${strategy} strategy"
+        steps.echo "Deploying to ${env} using ${strategy}"
 
         switch(strategy) {
 
@@ -59,7 +74,7 @@ class DeployManager implements Serializable {
                 break
 
             default:
-                steps.error "Invalid strategy: ${strategy}"
+                steps.error "Invalid strategy"
         }
     }
 
@@ -67,11 +82,12 @@ class DeployManager implements Serializable {
     // ROLLING DEPLOYMENT
     // =========================
     def rollingDeploy(String env) {
-        steps.echo "Executing Rolling Deployment"
+        steps.echo "Rolling deployment (docker-compose restart)"
 
         steps.sh """
-        kubectl apply -f k8s/${env}/
-        kubectl rollout status deployment/my-app
+        export KUBECONFIG=/root/.kube/config
+        docker-compose down
+        docker-compose up -d
         """
     }
 
@@ -79,11 +95,14 @@ class DeployManager implements Serializable {
     // BLUE-GREEN DEPLOYMENT
     // =========================
     def blueGreenDeploy(String env) {
-        steps.echo "Executing Blue-Green Deployment"
+        steps.echo "Blue-Green deployment (simulated)"
 
         steps.sh """
-        kubectl apply -f k8s/${env}/green/
-        kubectl patch service my-app -p '{"spec":{"selector":{"version":"green"}}}'
+        export KUBECONFIG=/root/.kube/config
+        echo "Deploying GREEN version..."
+        docker-compose up -d
+
+        echo "Switching traffic (simulated)"
         """
     }
 
@@ -91,12 +110,15 @@ class DeployManager implements Serializable {
     // CANARY DEPLOYMENT
     // =========================
     def canaryDeploy(String env) {
-        steps.echo "Executing Canary Deployment"
+        steps.echo "Canary deployment (simulated)"
 
         steps.sh """
-        kubectl apply -f k8s/${env}/canary/
-        sleep 10
-        kubectl apply -f k8s/${env}/full/
+        export KUBECONFIG=/root/.kube/config
+        echo "Deploying small subset..."
+        sleep 5
+
+        echo "Promoting full deployment..."
+        docker-compose up -d
         """
     }
 
@@ -106,7 +128,9 @@ class DeployManager implements Serializable {
     def healthCheck() {
         steps.echo "Checking application health..."
 
-        steps.sh "kubectl get pods"
+        steps.sh """
+        docker ps
+        """
     }
 
     // =========================
@@ -115,6 +139,10 @@ class DeployManager implements Serializable {
     def rollback() {
         steps.echo "Rollback triggered..."
 
-        steps.sh "kubectl rollout undo deployment/my-app"
+        steps.sh """
+        echo "Rolling back (restart previous containers)"
+        docker-compose down
+        docker-compose up -d
+        """
     }
 }
