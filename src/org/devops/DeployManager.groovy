@@ -12,41 +12,42 @@ class DeployManager implements Serializable {
     // VALIDATION
     // =========================
     def validate() {
-    steps.echo "Starting CI validation..."
+        steps.echo "===== VALIDATION STARTED ====="
 
-    steps.sh "ls -l"
+        steps.sh "ls -l"
 
-    // ONLY critical check → fail if missing
-    steps.sh """
-    if [ -f docker-compose.yaml ]; then
-        echo "docker-compose.yaml found"
-    else
-        echo "docker-compose.yaml missing!"
-        exit 1
-    fi
-    """
-
-    // NON-CRITICAL checks → do NOT fail pipeline
-    steps.sh """
-    echo "Checking service Dockerfiles..."
-
-    for dir in attendance employee frontend mysql notification elasticsearch; do
-        if [ -f "$dir/Dockerfile" ]; then
-            echo "$dir Dockerfile exists"
+        // Critical check
+        steps.sh """
+        if [ -f docker-compose.yaml ]; then
+            echo "[OK] docker-compose.yaml found"
         else
-            echo "WARNING: $dir Dockerfile missing"
+            echo "[ERROR] docker-compose.yaml missing"
+            exit 1
         fi
-    done
-    """
+        """
 
-    steps.echo "Validation successful"
-}
+        // Non-critical checks
+        steps.sh """
+        echo "Checking service Dockerfiles..."
+
+        for dir in attendance employee frontend mysql notification elasticsearch; do
+            if [ -f "$dir/Dockerfile" ]; then
+                echo "[OK] $dir Dockerfile exists"
+            else
+                echo "[WARN] $dir Dockerfile missing"
+            fi
+        done
+        """
+
+        steps.echo "===== VALIDATION COMPLETED ====="
+    }
 
     // =========================
     // DEPLOY ENTRY
     // =========================
     def deploy(String env, String strategy) {
-        steps.echo "Deploying using ${strategy} strategy in ${env}"
+        steps.echo "===== DEPLOYMENT STARTED ====="
+        steps.echo "ENV: ${env} | STRATEGY: ${strategy}"
 
         switch(strategy) {
             case "rolling":
@@ -59,7 +60,7 @@ class DeployManager implements Serializable {
                 canaryDeploy()
                 break
             default:
-                steps.error "Invalid strategy"
+                steps.error "Invalid deployment strategy"
         }
     }
 
@@ -67,12 +68,18 @@ class DeployManager implements Serializable {
     // ROLLING DEPLOYMENT
     // =========================
     def rollingDeploy() {
-        steps.echo "Rolling deployment started"
+        steps.echo "Rolling deployment..."
 
         steps.sh """
         cd salary
-        docker-compose pull
-        docker-compose down
+
+        echo "Pulling latest images..."
+        docker-compose pull || true
+
+        echo "Stopping old containers..."
+        docker-compose down || true
+
+        echo "Starting new containers..."
         docker-compose up -d
         """
     }
@@ -81,14 +88,17 @@ class DeployManager implements Serializable {
     // BLUE-GREEN DEPLOYMENT
     // =========================
     def blueGreenDeploy() {
-        steps.echo "Blue-Green deployment started"
+        steps.echo "Blue-Green deployment..."
 
         steps.sh """
         cd salary
-        docker-compose pull
+
+        docker-compose pull || true
+
         echo "Deploying GREEN version..."
         docker-compose up -d
-        echo "Switching traffic (simulated)"
+
+        echo "Traffic switch simulated"
         """
     }
 
@@ -96,13 +106,16 @@ class DeployManager implements Serializable {
     // CANARY DEPLOYMENT
     // =========================
     def canaryDeploy() {
-        steps.echo "Canary deployment started"
+        steps.echo "Canary deployment..."
 
         steps.sh """
         cd salary
-        docker-compose pull
+
+        docker-compose pull || true
+
         echo "Deploying canary version..."
         sleep 5
+
         echo "Promoting full deployment..."
         docker-compose up -d
         """
@@ -112,7 +125,7 @@ class DeployManager implements Serializable {
     // HEALTH CHECK
     // =========================
     def healthCheck() {
-        steps.echo "Checking application health..."
+        steps.echo "===== HEALTH CHECK ====="
 
         steps.sh """
         docker ps
@@ -123,13 +136,16 @@ class DeployManager implements Serializable {
     // ROLLBACK
     // =========================
     def rollback() {
-        steps.echo "Rollback triggered"
+        steps.echo "===== ROLLBACK INITIATED ====="
 
         steps.sh """
         cd salary
-        docker-compose pull
-        docker-compose down
-        docker-compose up -d
+
+        echo "Stopping containers..."
+        docker-compose down || true
+
+        echo "Restarting previous state..."
+        docker-compose up -d || true
         """
     }
 }
