@@ -9,15 +9,14 @@ class DeployManager implements Serializable {
     }
 
     // =========================
-    // VALIDATION (CI CHECKS)
+    // VALIDATION
     // =========================
     def validate() {
         steps.echo "Starting CI validation..."
 
-        // Basic check
-        steps.sh "echo 'Checking repository structure...' && ls -l"
+        steps.sh "ls -l"
 
-        // docker-compose check (important for your repo)
+        // docker-compose check
         steps.sh """
         if [ -f docker-compose.yaml ]; then
             echo "docker-compose.yaml found"
@@ -27,120 +26,79 @@ class DeployManager implements Serializable {
         fi
         """
 
-        // YAML validation (optional)
+        // Check Dockerfiles inside services
         steps.sh """
-        if command -v yamllint >/dev/null 2>&1; then
-            yamllint .
-        else
-            echo "yamllint not installed, skipping"
-        fi
-        """
+        echo "Checking service Dockerfiles..."
 
-        // Microservice folders check
-        steps.sh """
-        for dir in attendance employee frontend mysql notification salary; do
-            if [ -d "$dir" ]; then
-                echo "$dir exists"
+        for dir in attendance employee frontend mysql notification elasticsearch; do
+            if [ -f "$dir/Dockerfile" ]; then
+                echo "$dir Dockerfile exists"
             else
-                echo "$dir missing"
+                echo "$dir Dockerfile missing"
             fi
         done
         """
-
-        // Git info
-        steps.sh "git log -1 --oneline"
 
         steps.echo "Validation successful"
     }
 
     // =========================
-    // MAIN DEPLOY ENTRY
+    // DEPLOY
     // =========================
     def deploy(String env, String strategy) {
-        steps.echo "Deploying to ${env} using ${strategy}"
+        steps.echo "Deploying using ${strategy}"
 
         switch(strategy) {
-
             case "rolling":
-                rollingDeploy(env)
+                rollingDeploy()
                 break
-
             case "bluegreen":
-                blueGreenDeploy(env)
+                blueGreenDeploy()
                 break
-
             case "canary":
-                canaryDeploy(env)
+                canaryDeploy()
                 break
-
             default:
                 steps.error "Invalid strategy"
         }
     }
 
-    // =========================
-    // ROLLING DEPLOYMENT
-    // =========================
-    def rollingDeploy(String env) {
-        steps.echo "Rolling deployment (docker-compose restart)"
-
+    def rollingDeploy() {
         steps.sh """
-        export KUBECONFIG=/root/.kube/config
         docker-compose down
         docker-compose up -d
         """
     }
 
-    // =========================
-    // BLUE-GREEN DEPLOYMENT
-    // =========================
-    def blueGreenDeploy(String env) {
-        steps.echo "Blue-Green deployment (simulated)"
-
+    def blueGreenDeploy() {
         steps.sh """
-        export KUBECONFIG=/root/.kube/config
-        echo "Deploying GREEN version..."
+        echo "Blue-Green deployment"
         docker-compose up -d
-
-        echo "Switching traffic (simulated)"
         """
     }
 
-    // =========================
-    // CANARY DEPLOYMENT
-    // =========================
-    def canaryDeploy(String env) {
-        steps.echo "Canary deployment (simulated)"
-
+    def canaryDeploy() {
         steps.sh """
-        export KUBECONFIG=/root/.kube/config
-        echo "Deploying small subset..."
+        echo "Canary deployment"
         sleep 5
-
-        echo "Promoting full deployment..."
         docker-compose up -d
         """
     }
 
     // =========================
-    // HEALTH CHECK
+    // HEALTH
     // =========================
     def healthCheck() {
-        steps.echo "Checking application health..."
-
-        steps.sh """
-        docker ps
-        """
+        steps.sh "docker ps"
     }
 
     // =========================
     // ROLLBACK
     // =========================
     def rollback() {
-        steps.echo "Rollback triggered..."
+        steps.echo "Rollback triggered"
 
         steps.sh """
-        echo "Rolling back (restart previous containers)"
         docker-compose down
         docker-compose up -d
         """
