@@ -5,13 +5,11 @@ class DeployManager implements Serializable {
     def steps
     String env
     String strategy
-    String imageTag
 
-    DeployManager(def steps, String env, String strategy, String imageTag = "latest") {
+    DeployManager(def steps, String env, String strategy) {
         this.steps = steps
         this.env = env
         this.strategy = strategy
-        this.imageTag = imageTag
     }
 
     // =========================
@@ -23,7 +21,7 @@ class DeployManager implements Serializable {
 
         steps.sh "ls -l"
 
-        // Critical check
+        // Check docker-compose.yaml exists (ROOT)
         steps.sh '''
         if [ -f docker-compose.yaml ]; then
             echo "[OK] docker-compose.yaml found"
@@ -33,7 +31,7 @@ class DeployManager implements Serializable {
         fi
         '''
 
-        // Safe Dockerfile check (NO Groovy interpolation issue)
+        // Check Dockerfiles (non-breaking)
         steps.sh '''
         echo "Checking service Dockerfiles..."
         for d in attendance employee frontend mysql notification elasticsearch; do
@@ -83,41 +81,38 @@ class DeployManager implements Serializable {
         steps.echo "[ROLLING] Deployment"
 
         steps.sh '''
-        cd salary
+        cd /var/jenkins_home/workspace/deployment-pipeline
 
         echo "Pulling images..."
         docker-compose pull || true
 
-        echo "Restarting services..."
-        docker-compose down || true
+        echo "Starting containers..."
         docker-compose up -d
         '''
     }
 
     // =========================
-    // BLUE-GREEN (SIMPLIFIED)
+    // BLUE-GREEN DEPLOY
     // =========================
     def blueGreenDeploy() {
-        steps.echo "[BLUE-GREEN] Deployment (simplified)"
+        steps.echo "[BLUE-GREEN] Deployment"
 
         steps.sh '''
-        cd salary
+        cd /var/jenkins_home/workspace/deployment-pipeline
 
         docker-compose pull || true
-
-        echo "Simulating blue-green switch..."
         docker-compose up -d
         '''
     }
 
     // =========================
-    // CANARY (SIMPLIFIED)
+    // CANARY DEPLOY
     // =========================
     def canaryDeploy() {
-        steps.echo "[CANARY] Deployment (simplified)"
+        steps.echo "[CANARY] Deployment"
 
         steps.sh '''
-        cd salary
+        cd /var/jenkins_home/workspace/deployment-pipeline
 
         docker-compose pull || true
 
@@ -140,18 +135,15 @@ class DeployManager implements Serializable {
     }
 
     // =========================
-    // ROLLBACK (SAFE)
+    // ROLLBACK
     // =========================
     def rollback() {
         steps.echo "===== ROLLBACK ====="
 
         steps.sh '''
-        cd salary
+        cd /var/jenkins_home/workspace/deployment-pipeline
 
-        echo "Stopping containers..."
         docker-compose down || true
-
-        echo "Restarting last stable state..."
         docker-compose up -d || true
         '''
     }
