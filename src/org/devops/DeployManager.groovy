@@ -12,6 +12,9 @@ class DeployManager implements Serializable {
         this.strategy = strategy
     }
 
+    // =========================
+    // VALIDATION
+    // =========================
     def validate() {
         steps.echo "===== VALIDATION ====="
 
@@ -28,36 +31,49 @@ class DeployManager implements Serializable {
         steps.sh "docker-compose --version"
     }
 
+    // =========================
+    // DEPLOY
+    // =========================
     def deploy() {
         steps.echo "===== DEPLOY (${strategy}) ====="
 
         switch(strategy) {
             case "rolling":
-                rolling()
+                rollingDeploy()
                 break
             case "bluegreen":
-                bluegreen()
+                blueGreenDeploy()
                 break
             case "canary":
-                canary()
+                canaryDeploy()
                 break
             default:
                 steps.error "Invalid strategy"
         }
     }
 
-    def rolling() {
+    // =========================
+    // ROLLING
+    // =========================
+    def rollingDeploy() {
+        steps.echo "[ROLLING] Deployment"
+
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
 
         docker-compose pull || true
 
-        # 🔥 RUN ONLY STABLE SERVICES
-        docker-compose up -d empms-frontend empms-attendance empms-employee
+        # ✅ FIXED: only frontend (no ES dependency)
+        docker-compose up -d empms-frontend
         '''
     }
 
-    def bluegreen() {
+    // =========================
+    // BLUE-GREEN
+    // =========================
+    def blueGreenDeploy() {
+        steps.echo "[BLUE-GREEN] Deployment"
+
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
 
@@ -65,7 +81,12 @@ class DeployManager implements Serializable {
         '''
     }
 
-    def canary() {
+    // =========================
+    // CANARY
+    // =========================
+    def canaryDeploy() {
+        steps.echo "[CANARY] Deployment"
+
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
 
@@ -74,17 +95,28 @@ class DeployManager implements Serializable {
         '''
     }
 
+    // =========================
+    // HEALTH CHECK
+    // =========================
     def healthCheck() {
-        steps.sh "docker ps"
+        steps.echo "===== HEALTH CHECK ====="
+
+        steps.sh '''
+        docker ps
+        '''
     }
 
+    // =========================
+    // ROLLBACK
+    // =========================
     def rollback() {
         steps.echo "Rollback..."
 
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
+
         docker-compose down || true
-        docker-compose up -d empms-frontend
+        docker-compose up -d empms-frontend || true
         '''
     }
 }
