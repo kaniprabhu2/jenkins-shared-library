@@ -12,139 +12,79 @@ class DeployManager implements Serializable {
         this.strategy = strategy
     }
 
-    // =========================
-    // VALIDATION
-    // =========================
     def validate() {
-        steps.echo "===== VALIDATION STARTED ====="
-        steps.echo "ENV: ${env}"
+        steps.echo "===== VALIDATION ====="
 
-        steps.sh "ls -l"
-
-        // Check docker-compose.yaml exists (ROOT)
         steps.sh '''
         if [ -f docker-compose.yaml ]; then
-            echo "[OK] docker-compose.yaml found"
+            echo "docker-compose.yaml found"
         else
-            echo "[ERROR] docker-compose.yaml missing"
+            echo "Missing docker-compose.yaml"
             exit 1
         fi
         '''
 
-        // Check Dockerfiles (non-breaking)
-        steps.sh '''
-        echo "Checking service Dockerfiles..."
-        for d in attendance employee frontend mysql notification elasticsearch; do
-            if [ -f "$d/Dockerfile" ]; then
-                echo "[OK] $d Dockerfile exists"
-            else
-                echo "[WARN] $d Dockerfile missing"
-            fi
-        done
-        '''
-
-        // Check docker availability
-        steps.sh '''
-        docker --version || exit 1
-        docker-compose --version || exit 1
-        '''
-
-        steps.echo "===== VALIDATION COMPLETED ====="
+        steps.sh "docker --version"
+        steps.sh "docker-compose --version"
     }
 
-    // =========================
-    // DEPLOY ENTRY
-    // =========================
     def deploy() {
-        steps.echo "===== DEPLOY STARTED ====="
-        steps.echo "ENV: ${env} | STRATEGY: ${strategy}"
+        steps.echo "===== DEPLOY (${strategy}) ====="
 
         switch(strategy) {
             case "rolling":
-                rollingDeploy()
+                rolling()
                 break
             case "bluegreen":
-                blueGreenDeploy()
+                bluegreen()
                 break
             case "canary":
-                canaryDeploy()
+                canary()
                 break
             default:
                 steps.error "Invalid strategy"
         }
     }
 
-    // =========================
-    // ROLLING DEPLOY
-    // =========================
-    def rollingDeploy() {
-        steps.echo "[ROLLING] Deployment"
-
+    def rolling() {
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
 
-        echo "Pulling images..."
         docker-compose pull || true
 
-        echo "Starting containers..."
-        docker-compose up -d
+        # 🔥 RUN ONLY STABLE SERVICES
+        docker-compose up -d empms-frontend empms-attendance empms-employee
         '''
     }
 
-    // =========================
-    // BLUE-GREEN DEPLOY
-    // =========================
-    def blueGreenDeploy() {
-        steps.echo "[BLUE-GREEN] Deployment"
-
+    def bluegreen() {
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
 
-        docker-compose pull || true
-        docker-compose up -d
+        docker-compose up -d empms-frontend
         '''
     }
 
-    // =========================
-    // CANARY DEPLOY
-    // =========================
-    def canaryDeploy() {
-        steps.echo "[CANARY] Deployment"
-
+    def canary() {
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
 
-        docker-compose pull || true
-
-        echo "Deploying canary..."
+        docker-compose up -d empms-frontend
         sleep 5
-
-        docker-compose up -d
         '''
     }
 
-    // =========================
-    // HEALTH CHECK
-    // =========================
     def healthCheck() {
-        steps.echo "===== HEALTH CHECK ====="
-
-        steps.sh '''
-        docker ps
-        '''
+        steps.sh "docker ps"
     }
 
-    // =========================
-    // ROLLBACK
-    // =========================
     def rollback() {
-        steps.echo "===== ROLLBACK ====="
+        steps.echo "Rollback..."
 
         steps.sh '''
         cd /var/jenkins_home/workspace/deployment-pipeline
-
         docker-compose down || true
-        docker-compose up -d || true
+        docker-compose up -d empms-frontend
         '''
     }
 }
